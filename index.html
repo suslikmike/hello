@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ball Physics Simulation</title>
+    <title>Draggable Balls</title>
     <style>
         body {
             margin: 0;
@@ -11,324 +11,173 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            background-color: #f0f0f0;
             font-family: Arial, sans-serif;
         }
-        
-        #canvas {
-            border: 2px solid white;
-            background-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            border-radius: 4px;
+        canvas {
+            border: 2px solid #333;
+            background-color: white;
+            cursor: grab;
         }
-        
-        .controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .control-item {
-            margin: 8px 0;
-            font-size: 14px;
-        }
-        
-        button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 8px;
-        }
-        
-        button:hover {
-            background: #764ba2;
-        }
-        
-        .stats {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: monospace;
+        canvas:active {
+            cursor: grabbing;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    
-    <div class="controls">
-        <div class="control-item">
-            <button onclick="addBalls(10)">Add 10 Balls</button>
-        </div>
-        <div class="control-item">
-            <button onclick="resetSimulation()">Reset</button>
-        </div>
-        <div class="control-item">
-            <label>
-                <input type="checkbox" id="damping-toggle" checked onchange="toggleDamping()">
-                Enable Damping
-            </label>
-        </div>
-    </div>
-    
-    <div class="stats">
-        <div>Balls: <span id="ball-count">0</span></div>
-        <div>FPS: <span id="fps">0</span></div>
-        <div>Collisions: <span id="collision-count">0</span></div>
-    </div>
-
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         
-        canvas.width = Math.min(window.innerWidth - 40, 1000);
-        canvas.height = Math.min(window.innerHeight - 40, 800);
-        
-        // Physics configuration
-        const config = {
-            gravity: 0.3,
-            damping: 0.98,
-            velocityDamping: 0.99,
-            minVelocity: 0.01,
-            collisionDamping: 0.85,
-            separationCoefficient: 0.5,
-            maxBalls: 500
-        };
-        
-        let balls = [];
-        let frameCount = 0;
-        let lastTime = Date.now();
-        let fps = 0;
-        let totalCollisions = 0;
-        let enableDamping = true;
+        canvas.width = 800;
+        canvas.height = 600;
         
         class Ball {
-            constructor(x, y, radius = 5, velocityX = 0, velocityY = 0) {
+            constructor(x, y, radius, vx, vy, color) {
                 this.x = x;
                 this.y = y;
                 this.radius = radius;
-                this.vx = velocityX;
-                this.vy = velocityY;
-                this.mass = Math.PI * radius * radius;
-                this.color = this.randomColor();
-                this.lastCollisionTime = 0;
-            }
-            
-            randomColor() {
-                const colors = [
-                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
-                    '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#A9DFBF'
-                ];
-                return colors[Math.floor(Math.random() * colors.length)];
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.isDragging = false;
+                this.dragOffsetX = 0;
+                this.dragOffsetY = 0;
             }
             
             update() {
+                if (this.isDragging) return;
+                
                 // Apply gravity
-                this.vy += config.gravity;
+                this.vy += 0.3;
                 
-                // Apply air resistance/damping
-                if (enableDamping) {
-                    this.vx *= config.velocityDamping;
-                    this.vy *= config.velocityDamping;
-                }
-                
-                // Stop very slow moving balls to prevent jitter
-                if (Math.abs(this.vx) < config.minVelocity) this.vx = 0;
-                if (Math.abs(this.vy) < config.minVelocity) this.vy = 0;
-                
-                // Update position
                 this.x += this.vx;
                 this.y += this.vy;
                 
-                // Boundary collision - walls
-                if (this.x - this.radius < 0) {
-                    this.x = this.radius;
-                    this.vx = Math.abs(this.vx) * config.collisionDamping;
-                }
-                if (this.x + this.radius > canvas.width) {
-                    this.x = canvas.width - this.radius;
-                    this.vx = -Math.abs(this.vx) * config.collisionDamping;
+                // Bounce off walls
+                if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+                    this.vx = -this.vx * 0.8;
+                    this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
                 }
                 
-                // Boundary collision - floor
                 if (this.y + this.radius > canvas.height) {
+                    this.vy = -this.vy * 0.8;
                     this.y = canvas.height - this.radius;
-                    this.vy = -Math.abs(this.vy) * config.collisionDamping;
                 }
                 
-                // Boundary collision - ceiling
-                if (this.y - this.radius < 0) {
-                    this.y = this.radius;
-                    this.vy = Math.abs(this.vy) * config.collisionDamping;
-                }
+                // Stop if very slow
+                if (Math.abs(this.vx) < 0.1) this.vx = 0;
+                if (Math.abs(this.vy) < 0.1) this.vy = 0;
             }
             
             draw() {
+                ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
                 ctx.stroke();
             }
-        }
-        
-        function addBalls(count) {
-            const newCount = Math.min(balls.length + count, config.maxBalls);
-            const toAdd = newCount - balls.length;
             
-            for (let i = 0; i < toAdd; i++) {
-                const radius = 3 + Math.random() * 4;
-                const x = Math.random() * (canvas.width - radius * 2) + radius;
-                const y = Math.random() * (canvas.height * 0.5) + radius;
-                const vx = (Math.random() - 0.5) * 4;
-                const vy = (Math.random() - 0.5) * 4;
-                
-                balls.push(new Ball(x, y, radius, vx, vy));
+            isPointInside(px, py) {
+                const dx = px - this.x;
+                const dy = py - this.y;
+                return dx * dx + dy * dy <= this.radius * this.radius;
             }
-        }
-        
-        function resetSimulation() {
-            balls = [];
-            totalCollisions = 0;
-            addBalls(20);
-        }
-        
-        function toggleDamping() {
-            enableDamping = document.getElementById('damping-toggle').checked;
-        }
-        
-        function checkCollisions() {
-            let collisionCount = 0;
-            const threshold = 0.016; // ~1 frame at 60fps
             
-            for (let i = 0; i < balls.length; i++) {
-                for (let j = i + 1; j < balls.length; j++) {
-                    const ball1 = balls[i];
-                    const ball2 = balls[j];
-                    
-                    // Calculate distance
-                    const dx = ball2.x - ball1.x;
-                    const dy = ball2.y - ball1.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    const minDistance = ball1.radius + ball2.radius;
-                    
-                    if (distance < minDistance) {
-                        const now = Date.now() / 1000;
-                        
-                        // Prevent multiple collision detections in quick succession
-                        if (now - ball1.lastCollisionTime > threshold && 
-                            now - ball2.lastCollisionTime > threshold) {
-                            
-                            collisionCount++;
-                            ball1.lastCollisionTime = now;
-                            ball2.lastCollisionTime = now;
-                            
-                            // Separate overlapping balls
-                            const overlap = minDistance - distance;
-                            const separationX = (dx / distance) * overlap * config.separationCoefficient;
-                            const separationY = (dy / distance) * overlap * config.separationCoefficient;
-                            
-                            ball1.x -= separationX;
-                            ball1.y -= separationY;
-                            ball2.x += separationX;
-                            ball2.y += separationY;
-                            
-                            // Elastic collision response
-                            const angle = Math.atan2(dy, dx);
-                            const sin = Math.sin(angle);
-                            const cos = Math.cos(angle);
-                            
-                            // Rotate velocities
-                            const vx1 = ball1.vx * cos + ball1.vy * sin;
-                            const vy1 = ball1.vy * cos - ball1.vx * sin;
-                            const vx2 = ball2.vx * cos + ball2.vy * sin;
-                            const vy2 = ball2.vy * cos - ball2.vx * sin;
-                            
-                            // Conservation of momentum for x-axis (using mass)
-                            const m1 = ball1.mass;
-                            const m2 = ball2.mass;
-                            const totalMass = m1 + m2;
-                            
-                            const vx1Final = ((m1 - m2) * vx1 + 2 * m2 * vx2) / totalMass;
-                            const vx2Final = ((m2 - m1) * vx2 + 2 * m1 * vx1) / totalMass;
-                            
-                            // No exchange on y-axis (only for 1D simplified)
-                            const vy1Final = vy1;
-                            const vy2Final = vy2;
-                            
-                            // Rotate back
-                            ball1.vx = vx1Final * cos - vy1Final * sin;
-                            ball1.vy = vy1Final * cos + vx1Final * sin;
-                            ball2.vx = vx2Final * cos - vy2Final * sin;
-                            ball2.vy = vy2Final * cos + vx2Final * sin;
-                            
-                            // Apply additional damping to reduce excessive bouncing
-                            ball1.vx *= 0.95;
-                            ball1.vy *= 0.95;
-                            ball2.vx *= 0.95;
-                            ball2.vy *= 0.95;
-                        }
-                    }
+            startDrag(px, py) {
+                this.isDragging = true;
+                this.dragOffsetX = px - this.x;
+                this.dragOffsetY = py - this.y;
+                this.vx = 0;
+                this.vy = 0;
+            }
+            
+            drag(px, py) {
+                if (this.isDragging) {
+                    this.x = px - this.dragOffsetX;
+                    this.y = py - this.dragOffsetY;
                 }
             }
             
-            return collisionCount;
+            endDrag() {
+                this.isDragging = false;
+            }
         }
         
-        function animate() {
-            // Clear canvas
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const balls = [];
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+        
+        // Create balls with radius 6-10
+        for (let i = 0; i < 8; i++) {
+            const radius = Math.random() * 4 + 6; // 6-10
+            const ball = new Ball(
+                Math.random() * (canvas.width - radius * 2) + radius,
+                Math.random() * (canvas.height * 0.5),
+                radius,
+                (Math.random() - 0.5) * 4,
+                0,
+                colors[i]
+            );
+            balls.push(ball);
+        }
+        
+        let draggedBall = null;
+        
+        // Mouse events for dragging
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const px = e.clientX - rect.left;
+            const py = e.clientY - rect.top;
             
-            // Update and draw balls
+            // Check from last ball to first (reverse order for top ball priority)
+            for (let i = balls.length - 1; i >= 0; i--) {
+                if (balls[i].isPointInside(px, py)) {
+                    draggedBall = balls[i];
+                    draggedBall.startDrag(px, py);
+                    break;
+                }
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (draggedBall) {
+                const rect = canvas.getBoundingClientRect();
+                const px = e.clientX - rect.left;
+                const py = e.clientY - rect.top;
+                draggedBall.drag(px, py);
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            if (draggedBall) {
+                draggedBall.endDrag();
+                draggedBall = null;
+            }
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            if (draggedBall) {
+                draggedBall.endDrag();
+                draggedBall = null;
+            }
+        });
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
             for (let ball of balls) {
                 ball.update();
                 ball.draw();
             }
             
-            // Check and handle collisions
-            const collisions = checkCollisions();
-            totalCollisions += collisions;
-            
-            // Update stats
-            frameCount++;
-            const now = Date.now();
-            if (now - lastTime >= 1000) {
-                fps = frameCount;
-                frameCount = 0;
-                lastTime = now;
-            }
-            
-            document.getElementById('ball-count').textContent = balls.length;
-            document.getElementById('fps').textContent = fps;
-            document.getElementById('collision-count').textContent = totalCollisions;
-            
             requestAnimationFrame(animate);
         }
         
-        // Initialize
-        addBalls(20);
         animate();
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            canvas.width = Math.min(window.innerWidth - 40, 1000);
-            canvas.height = Math.min(window.innerHeight - 40, 800);
-        });
     </script>
 </body>
 </html>
