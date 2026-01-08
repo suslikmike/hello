@@ -3,481 +3,332 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bouncing Balls</title>
+    <title>Ball Physics Simulation</title>
     <style>
-        * {
+        body {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Arial', sans-serif;
-            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
-
-        .container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
+        
+        #canvas {
+            border: 2px solid white;
+            background-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border-radius: 4px;
         }
-
-        .ball {
-            width: 80px;
-            height: 80px;
-            background: radial-gradient(circle at 30% 30%, #ffffff, #ff6b6b);
-            border-radius: 50%;
-            position: absolute;
-            transform-origin: 50% 100%;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
-                        inset -10px -10px 20px rgba(0, 0, 0, 0.2),
-                        inset 5px 5px 10px rgba(255, 255, 255, 0.3);
-            cursor: grab;
-            user-select: none;
-            transition: none;
-            pointer-events: auto;
-        }
-
-        .ball:active {
-            cursor: grabbing;
-        }
-
-        .ball::before {
-            content: '';
+        
+        .controls {
             position: absolute;
             top: 20px;
-            left: 25px;
-            width: 15px;
-            height: 15px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
-
-        .shadow {
-            position: absolute;
-            width: 60px;
-            height: 20px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 50%;
-            transform-origin: center;
-            pointer-events: none;
+        
+        .control-item {
+            margin: 8px 0;
+            font-size: 14px;
         }
-
-        h1 {
-            position: absolute;
-            top: 50px;
-            left: 50%;
-            transform: translateX(-50%);
+        
+        button {
+            background: #667eea;
             color: white;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            font-size: 2.5em;
-            letter-spacing: 2px;
-            pointer-events: none;
-            z-index: 10;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 8px;
         }
-
-        .control-panel {
+        
+        button:hover {
+            background: #764ba2;
+        }
+        
+        .stats {
             position: absolute;
             top: 20px;
             right: 20px;
             background: rgba(255, 255, 255, 0.9);
             padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            z-index: 100;
-            min-width: 200px;
-        }
-
-        .control-panel label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #333;
+            border-radius: 8px;
             font-size: 14px;
-        }
-
-        .control-panel input {
-            width: 100%;
-            padding: 8px;
-            border: 2px solid #667eea;
-            border-radius: 5px;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-
-        .control-panel button {
-            width: 100%;
-            padding: 10px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .control-panel button:hover {
-            background: #5568d3;
-        }
-
-        .control-panel button:active {
-            background: #4457c2;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
-    <h1>Bouncing Balls</h1>
-    <div class="control-panel">
-        <label for="ballCount">Number of Balls:</label>
-        <input type="number" id="ballCount" min="1" max="50" value="1">
-        <button id="spawnBtn">Spawn Balls</button>
+    <canvas id="canvas"></canvas>
+    
+    <div class="controls">
+        <div class="control-item">
+            <button onclick="addBalls(10)">Add 10 Balls</button>
+        </div>
+        <div class="control-item">
+            <button onclick="resetSimulation()">Reset</button>
+        </div>
+        <div class="control-item">
+            <label>
+                <input type="checkbox" id="damping-toggle" checked onchange="toggleDamping()">
+                Enable Damping
+            </label>
+        </div>
     </div>
-    <div class="container" id="container"></div>
+    
+    <div class="stats">
+        <div>Balls: <span id="ball-count">0</span></div>
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Collisions: <span id="collision-count">0</span></div>
+    </div>
 
     <script>
-        const container = document.getElementById('container');
-        const ballCountInput = document.getElementById('ballCount');
-        const spawnBtn = document.getElementById('spawnBtn');
-
-        // Physics constants
-        const GRAVITY = 0.8;
-        const BOUNCE_DAMPING = 0.7;
-        const FRICTION = 0.98;
-        const BALL_RADIUS = 40;
-        const BALL_DIAMETER = BALL_RADIUS * 2;
-        let FLOOR_Y = window.innerHeight - BALL_RADIUS;
-        const VELOCITY_SMOOTHING = 0.3;
-        const COLLISION_DAMPING = 0.9; // Energy loss in ball-to-ball collisions
-
-        // Array to store all balls
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = Math.min(window.innerWidth - 40, 1000);
+        canvas.height = Math.min(window.innerHeight - 40, 800);
+        
+        // Physics configuration
+        const config = {
+            gravity: 0.3,
+            damping: 0.98,
+            velocityDamping: 0.99,
+            minVelocity: 0.01,
+            collisionDamping: 0.85,
+            separationCoefficient: 0.5,
+            maxBalls: 500
+        };
+        
         let balls = [];
-        let draggedBall = null;
-
-        // Ball class
+        let frameCount = 0;
+        let lastTime = Date.now();
+        let fps = 0;
+        let totalCollisions = 0;
+        let enableDamping = true;
+        
         class Ball {
-            constructor(id, startX, startY) {
-                this.id = id;
-                this.x = startX;
-                this.y = startY;
-                this.vx = 0;
-                this.vy = 0;
-                this.isDragging = false;
-                this.dragOffsetX = 0;
-                this.dragOffsetY = 0;
-                this.lastSquash = 0;
-                this.lastDragX = 0;
-                this.lastDragY = 0;
-                this.lastDragTime = 0;
-
-                // Create DOM elements
-                this.shadow = document.createElement('div');
-                this.shadow.className = 'shadow';
-                this.element = document.createElement('div');
-                this.element.className = 'ball';
-                this.element.dataset.ballId = id;
-
-                container.appendChild(this.shadow);
-                container.appendChild(this.element);
-
-                // Add event listeners
-                this.element.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-                this.element.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+            constructor(x, y, radius = 5, velocityX = 0, velocityY = 0) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.vx = velocityX;
+                this.vy = velocityY;
+                this.mass = Math.PI * radius * radius;
+                this.color = this.randomColor();
+                this.lastCollisionTime = 0;
             }
-
-            handleMouseDown(e) {
-                if (draggedBall) return; // Prevent multiple drags
-                draggedBall = this;
-                this.isDragging = true;
-                const rect = this.element.getBoundingClientRect();
-                this.dragOffsetX = e.clientX - (rect.left + BALL_RADIUS);
-                this.dragOffsetY = e.clientY - (rect.top + BALL_RADIUS);
-                
-                this.lastDragX = e.clientX - this.dragOffsetX;
-                this.lastDragY = e.clientY - this.dragOffsetY;
-                this.lastDragTime = Date.now();
-                e.preventDefault();
+            
+            randomColor() {
+                const colors = [
+                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+                    '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#A9DFBF'
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
             }
-
-            handleTouchStart(e) {
-                if (draggedBall) return;
-                draggedBall = this;
-                this.isDragging = true;
-                const touch = e.touches[0];
-                const rect = this.element.getBoundingClientRect();
-                this.dragOffsetX = touch.clientX - (rect.left + BALL_RADIUS);
-                this.dragOffsetY = touch.clientY - (rect.top + BALL_RADIUS);
+            
+            update() {
+                // Apply gravity
+                this.vy += config.gravity;
                 
-                this.lastDragX = touch.clientX - this.dragOffsetX;
-                this.lastDragY = touch.clientY - this.dragOffsetY;
-                this.lastDragTime = Date.now();
-                e.preventDefault();
-            }
-
-            updatePosition() {
-                const ballX = this.x - BALL_RADIUS;
-                const ballY = this.y - BALL_RADIUS;
-                
-                // Calculate squash effect
-                const distanceFromGround = FLOOR_Y - this.y;
-                let squashY = 1;
-                let squashX = 1;
-                
-                const timeSinceSquash = Date.now() - this.lastSquash;
-                
-                if (distanceFromGround < 10 && this.vy > 0 && timeSinceSquash > 50) {
-                    // Ground impact
-                    const impact = Math.min(this.vy * 0.1, 0.3);
-                    squashY = 1 - impact;
-                    squashX = 1 + impact * 0.5;
-                    this.lastSquash = Date.now();
-                } else if (timeSinceSquash < 100) {
-                    // Recovery from squash (ground or collision)
-                    const recovery = timeSinceSquash / 100;
-                    squashY = 0.8 + (0.2 * recovery);
-                    squashX = 1.1 - (0.1 * recovery);
+                // Apply air resistance/damping
+                if (enableDamping) {
+                    this.vx *= config.velocityDamping;
+                    this.vy *= config.velocityDamping;
                 }
-
-                this.element.style.left = ballX + 'px';
-                this.element.style.top = ballY + 'px';
-                this.element.style.transform = `scaleY(${squashY}) scaleX(${squashX})`;
-
-                // Update shadow
-                const shadowX = this.x - 30;
-                const shadowY = FLOOR_Y - 10;
-                const shadowScale = Math.max(0.6, 1 - (FLOOR_Y - this.y) / 400);
-                const shadowOpacity = Math.max(0.3, 0.5 - (FLOOR_Y - this.y) / 600);
                 
-                this.shadow.style.left = shadowX + 'px';
-                this.shadow.style.top = shadowY + 'px';
-                this.shadow.style.transform = `scale(${shadowScale})`;
-                this.shadow.style.opacity = shadowOpacity;
-            }
-
-            checkCollision(otherBall) {
-                if (this === otherBall || this.isDragging || otherBall.isDragging) {
-                    return false;
+                // Stop very slow moving balls to prevent jitter
+                if (Math.abs(this.vx) < config.minVelocity) this.vx = 0;
+                if (Math.abs(this.vy) < config.minVelocity) this.vy = 0;
+                
+                // Update position
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundary collision - walls
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vx = Math.abs(this.vx) * config.collisionDamping;
                 }
-
-                const dx = otherBall.x - this.x;
-                const dy = otherBall.y - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const minDistance = BALL_DIAMETER;
-
-                if (distance < minDistance && distance > 0) {
-                    // Collision detected - resolve overlap
-                    const overlap = minDistance - distance;
-                    const angle = Math.atan2(dy, dx);
+                if (this.x + this.radius > canvas.width) {
+                    this.x = canvas.width - this.radius;
+                    this.vx = -Math.abs(this.vx) * config.collisionDamping;
+                }
+                
+                // Boundary collision - floor
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.vy = -Math.abs(this.vy) * config.collisionDamping;
+                }
+                
+                // Boundary collision - ceiling
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.vy = Math.abs(this.vy) * config.collisionDamping;
+                }
+            }
+            
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+        
+        function addBalls(count) {
+            const newCount = Math.min(balls.length + count, config.maxBalls);
+            const toAdd = newCount - balls.length;
+            
+            for (let i = 0; i < toAdd; i++) {
+                const radius = 3 + Math.random() * 4;
+                const x = Math.random() * (canvas.width - radius * 2) + radius;
+                const y = Math.random() * (canvas.height * 0.5) + radius;
+                const vx = (Math.random() - 0.5) * 4;
+                const vy = (Math.random() - 0.5) * 4;
+                
+                balls.push(new Ball(x, y, radius, vx, vy));
+            }
+        }
+        
+        function resetSimulation() {
+            balls = [];
+            totalCollisions = 0;
+            addBalls(20);
+        }
+        
+        function toggleDamping() {
+            enableDamping = document.getElementById('damping-toggle').checked;
+        }
+        
+        function checkCollisions() {
+            let collisionCount = 0;
+            const threshold = 0.016; // ~1 frame at 60fps
+            
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    const ball1 = balls[i];
+                    const ball2 = balls[j];
                     
-                    // Separate balls to prevent overlap
-                    const separationX = Math.cos(angle) * overlap * 0.5;
-                    const separationY = Math.sin(angle) * overlap * 0.5;
+                    // Calculate distance
+                    const dx = ball2.x - ball1.x;
+                    const dy = ball2.y - ball1.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const minDistance = ball1.radius + ball2.radius;
                     
-                    this.x -= separationX;
-                    this.y -= separationY;
-                    otherBall.x += separationX;
-                    otherBall.y += separationY;
-
-                    // Calculate collision response (elastic collision)
-                    const relativeVx = otherBall.vx - this.vx;
-                    const relativeVy = otherBall.vy - this.vy;
-                    const relativeSpeed = relativeVx * Math.cos(angle) + relativeVy * Math.sin(angle);
-
-                    if (relativeSpeed > 0) {
-                        // Balls are moving towards each other
-                        const impulse = 2 * relativeSpeed * COLLISION_DAMPING;
+                    if (distance < minDistance) {
+                        const now = Date.now() / 1000;
                         
-                        this.vx += impulse * Math.cos(angle);
-                        this.vy += impulse * Math.sin(angle);
-                        otherBall.vx -= impulse * Math.cos(angle);
-                        otherBall.vy -= impulse * Math.sin(angle);
-
-                        // Add squash effect on collision
-                        const impact = Math.min(Math.abs(relativeSpeed) * 0.05, 0.2);
-                        this.lastSquash = Date.now();
-                        otherBall.lastSquash = Date.now();
-                    }
-
-                    return true;
-                }
-
-                return false;
-            }
-
-            updatePhysics() {
-                if (!this.isDragging) {
-                    // Apply gravity
-                    this.vy += GRAVITY;
-
-                    // Apply friction
-                    this.vx *= FRICTION;
-
-                    // Update position
-                    this.x += this.vx;
-                    this.y += this.vy;
-
-                    // Bounce off floor
-                    if (this.y >= FLOOR_Y) {
-                        this.y = FLOOR_Y;
-                        this.vy = -this.vy * BOUNCE_DAMPING;
-                        this.vx *= FRICTION;
-                        
-                        if (Math.abs(this.vy) < 2) {
-                            this.vy = 0;
+                        // Prevent multiple collision detections in quick succession
+                        if (now - ball1.lastCollisionTime > threshold && 
+                            now - ball2.lastCollisionTime > threshold) {
+                            
+                            collisionCount++;
+                            ball1.lastCollisionTime = now;
+                            ball2.lastCollisionTime = now;
+                            
+                            // Separate overlapping balls
+                            const overlap = minDistance - distance;
+                            const separationX = (dx / distance) * overlap * config.separationCoefficient;
+                            const separationY = (dy / distance) * overlap * config.separationCoefficient;
+                            
+                            ball1.x -= separationX;
+                            ball1.y -= separationY;
+                            ball2.x += separationX;
+                            ball2.y += separationY;
+                            
+                            // Elastic collision response
+                            const angle = Math.atan2(dy, dx);
+                            const sin = Math.sin(angle);
+                            const cos = Math.cos(angle);
+                            
+                            // Rotate velocities
+                            const vx1 = ball1.vx * cos + ball1.vy * sin;
+                            const vy1 = ball1.vy * cos - ball1.vx * sin;
+                            const vx2 = ball2.vx * cos + ball2.vy * sin;
+                            const vy2 = ball2.vy * cos - ball2.vx * sin;
+                            
+                            // Conservation of momentum for x-axis (using mass)
+                            const m1 = ball1.mass;
+                            const m2 = ball2.mass;
+                            const totalMass = m1 + m2;
+                            
+                            const vx1Final = ((m1 - m2) * vx1 + 2 * m2 * vx2) / totalMass;
+                            const vx2Final = ((m2 - m1) * vx2 + 2 * m1 * vx1) / totalMass;
+                            
+                            // No exchange on y-axis (only for 1D simplified)
+                            const vy1Final = vy1;
+                            const vy2Final = vy2;
+                            
+                            // Rotate back
+                            ball1.vx = vx1Final * cos - vy1Final * sin;
+                            ball1.vy = vy1Final * cos + vx1Final * sin;
+                            ball2.vx = vx2Final * cos - vy2Final * sin;
+                            ball2.vy = vy2Final * cos + vx2Final * sin;
+                            
+                            // Apply additional damping to reduce excessive bouncing
+                            ball1.vx *= 0.95;
+                            ball1.vy *= 0.95;
+                            ball2.vx *= 0.95;
+                            ball2.vy *= 0.95;
                         }
                     }
-
-                    // Bounce off walls
-                    if (this.x <= BALL_RADIUS) {
-                        this.x = BALL_RADIUS;
-                        this.vx = -this.vx * BOUNCE_DAMPING;
-                    } else if (this.x >= window.innerWidth - BALL_RADIUS) {
-                        this.x = window.innerWidth - BALL_RADIUS;
-                        this.vx = -this.vx * BOUNCE_DAMPING;
-                    }
-
-                    // Bounce off ceiling
-                    if (this.y <= BALL_RADIUS) {
-                        this.y = BALL_RADIUS;
-                        this.vy = -this.vy * BOUNCE_DAMPING;
-                    }
-                }
-
-                this.updatePosition();
-            }
-
-            checkAllCollisions() {
-                // Check collisions with other balls (only check pairs once)
-                const ballIndex = balls.indexOf(this);
-                for (let i = ballIndex + 1; i < balls.length; i++) {
-                    this.checkCollision(balls[i]);
                 }
             }
-
-            handleDrag(newX, newY) {
-                const currentTime = Date.now();
-                const deltaTime = Math.max(1, currentTime - this.lastDragTime);
-                const deltaX = newX - this.lastDragX;
-                const deltaY = newY - this.lastDragY;
-                
-                const newVx = (deltaX / deltaTime) * 16;
-                const newVy = (deltaY / deltaTime) * 16;
-                
-                this.vx = this.vx * (1 - VELOCITY_SMOOTHING) + newVx * VELOCITY_SMOOTHING;
-                this.vy = this.vy * (1 - VELOCITY_SMOOTHING) + newVy * VELOCITY_SMOOTHING;
-                
-                this.x = Math.max(BALL_RADIUS, Math.min(window.innerWidth - BALL_RADIUS, newX));
-                this.y = Math.max(BALL_RADIUS, Math.min(FLOOR_Y, newY));
-                
-                this.lastDragX = this.x;
-                this.lastDragY = this.y;
-                this.lastDragTime = currentTime;
-                
-                this.updatePosition();
-            }
-
-            remove() {
-                this.element.remove();
-                this.shadow.remove();
-            }
-        }
-
-        // Mouse and touch event handlers
-        document.addEventListener('mousemove', (e) => {
-            if (draggedBall && draggedBall.isDragging) {
-                const newX = e.clientX - draggedBall.dragOffsetX;
-                const newY = e.clientY - draggedBall.dragOffsetY;
-                draggedBall.handleDrag(newX, newY);
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (draggedBall) {
-                draggedBall.isDragging = false;
-                draggedBall = null;
-            }
-        });
-
-        document.addEventListener('touchmove', (e) => {
-            if (draggedBall && draggedBall.isDragging) {
-                const touch = e.touches[0];
-                const newX = touch.clientX - draggedBall.dragOffsetX;
-                const newY = touch.clientY - draggedBall.dragOffsetY;
-                draggedBall.handleDrag(newX, newY);
-                e.preventDefault();
-            }
-        });
-
-        document.addEventListener('touchend', () => {
-            if (draggedBall) {
-                draggedBall.isDragging = false;
-                draggedBall = null;
-            }
-        });
-
-        // Spawn balls function
-        function spawnBalls(count) {
-            // Remove existing balls
-            balls.forEach(ball => ball.remove());
-            balls = [];
-            draggedBall = null;
-
-            // Spawn new balls
-            for (let i = 0; i < count; i++) {
-                const startX = (window.innerWidth / (count + 1)) * (i + 1);
-                const startY = 100 + (i * 20); // Stagger vertically
-                const ball = new Ball(i, startX, startY);
-                balls.push(ball);
-            }
-        }
-
-        // Spawn button handler
-        spawnBtn.addEventListener('click', () => {
-            const count = parseInt(ballCountInput.value) || 1;
-            const clampedCount = Math.max(1, Math.min(50, count));
-            ballCountInput.value = clampedCount;
-            spawnBalls(clampedCount);
-        });
-
-        // Allow Enter key to spawn
-        ballCountInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                spawnBtn.click();
-            }
-        });
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            FLOOR_Y = window.innerHeight - BALL_RADIUS;
-            balls.forEach(ball => {
-                ball.x = Math.max(BALL_RADIUS, Math.min(window.innerWidth - BALL_RADIUS, ball.x));
-                ball.y = Math.min(ball.y, FLOOR_Y);
-                ball.updatePosition();
-            });
-        });
-
-        // Initialize with 1 ball
-        spawnBalls(1);
-
-        // Animation loop
-        function animate() {
-            // Update physics for all balls
-            balls.forEach(ball => ball.updatePhysics());
             
-            // Check collisions between all balls (after physics update)
-            balls.forEach(ball => ball.checkAllCollisions());
+            return collisionCount;
+        }
+        
+        function animate() {
+            // Clear canvas
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update and draw balls
+            for (let ball of balls) {
+                ball.update();
+                ball.draw();
+            }
+            
+            // Check and handle collisions
+            const collisions = checkCollisions();
+            totalCollisions += collisions;
+            
+            // Update stats
+            frameCount++;
+            const now = Date.now();
+            if (now - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = now;
+            }
+            
+            document.getElementById('ball-count').textContent = balls.length;
+            document.getElementById('fps').textContent = fps;
+            document.getElementById('collision-count').textContent = totalCollisions;
             
             requestAnimationFrame(animate);
         }
-
+        
+        // Initialize
+        addBalls(20);
         animate();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = Math.min(window.innerWidth - 40, 1000);
+            canvas.height = Math.min(window.innerHeight - 40, 800);
+        });
     </script>
 </body>
 </html>
