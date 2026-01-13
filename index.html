@@ -16,7 +16,8 @@
         }
         
         h1 {
-            color: #333;
+            color: turquoise;
+            text-shadow: 3px 3px 3px darkblue;
         }
         
         canvas {
@@ -32,6 +33,7 @@
             margin-bottom: 20px;
             flex-wrap: wrap;
             justify-content: center;
+            background-color: skyblue;
         }
         
         button {
@@ -192,7 +194,15 @@
         }
         
         function redraw() {
+
+
+            
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+                drawCircle(50,50, 20, 20)
+
             shapes.forEach(shape => {
                 const prevColor = currentColor;
                 currentColor = shape.color;
@@ -240,11 +250,19 @@
             redraw();
         });
         
+
+        window.document.onready = function()  {
+            console.log("onload")
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        
+
         canvas.addEventListener('mouseleave', () => {
-            if (isDrawing) {
-                isDrawing = false;
-                redraw();
-            }
+            // if (isDrawing) {
+            //     isDrawing = false;
+            //     redraw();
+            // }
         });
     </script>
 </body>
